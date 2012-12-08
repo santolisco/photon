@@ -19,6 +19,8 @@ public class MediaFileFilter extends ExtensionFileFilter {
               ".mp4",
               ".mov",
               ".flv",
+              ".3gp",
+              ".mts",
               
 //              ".mp3",
 //              ".amr",

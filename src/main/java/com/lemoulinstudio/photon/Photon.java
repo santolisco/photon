@@ -2,10 +2,12 @@ package com.lemoulinstudio.photon;
 
 import com.lemoulinstudio.photon.entity.PhotonFile;
 import com.lemoulinstudio.photon.util.FileTree;
+import com.lemoulinstudio.photon.util.FileUtil;
 import com.lemoulinstudio.photon.util.filter.MediaFileFilter;
 import com.lemoulinstudio.photon.util.mongo.MongoUtil;
 import com.mongodb.Mongo;
 import java.io.File;
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -20,11 +22,15 @@ public class Photon {
 
   private final MongoTemplate db;
   private final DateTimeFormatter dateTimeFormatter;
+  private final DateTimeFormatter pathDateFormatter;
 
   public Photon() throws UnknownHostException {
     this.db = new MongoTemplate(new Mongo(), "photon");
     this.dateTimeFormatter = DateTimeFormat
           .forPattern("yyyy-MM-dd HH:mm")
+          .withZone(DateTimeZone.forOffsetHours(8));
+    this.pathDateFormatter = DateTimeFormat
+          .forPattern("yyyy/MM/dd/")
           .withZone(DateTimeZone.forOffsetHours(8));
   }
 
@@ -75,7 +81,17 @@ public class Photon {
   public void exportSorted(File exportDirectory) {
     for (PhotonFile photonFile : MongoUtil.find(db, new Query()
             .with(new Sort("date", "name")), PhotonFile.class)) {
-      printPhotonFile(photonFile);
+      //printPhotonFile(photonFile);
+      File sourceFile = new File(photonFile.getPath());
+      File destFile = new File(exportDirectory,
+              pathDateFormatter.print(photonFile.getDate().getTime())
+              + photonFile.getChecksum() + "_" + photonFile.getName().toLowerCase());
+      try {
+        FileUtil.safeCopyFile(sourceFile, destFile);
+        System.out.println(destFile.getAbsolutePath());
+      } catch (IOException ex) {
+        Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, photonFile.getPath(), ex);
+      }
     }
   }
   
@@ -95,9 +111,9 @@ public class Photon {
 
     //photon.importFiles(new File(args[0]));
     
-    photon.findDuplicates();
+    //photon.findDuplicates();
     
-    //photon.exportSorted(new File(args[0]));
+    //photon.exportSorted(new File(args[1]));
 
     photon.closeDB();
   }
