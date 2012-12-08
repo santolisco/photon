@@ -3,16 +3,15 @@ package com.lemoulinstudio.photon;
 import com.lemoulinstudio.photon.entity.PhotonFile;
 import com.lemoulinstudio.photon.util.FileTree;
 import com.lemoulinstudio.photon.util.filter.MediaFileFilter;
+import com.lemoulinstudio.photon.util.mongo.MongoUtil;
 import com.mongodb.Mongo;
 import java.io.File;
 import java.net.UnknownHostException;
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
@@ -20,9 +19,13 @@ import org.springframework.data.mongodb.core.query.Query;
 public class Photon {
 
   private final MongoTemplate db;
+  private final DateTimeFormatter dateTimeFormatter;
 
   public Photon() throws UnknownHostException {
     this.db = new MongoTemplate(new Mongo(), "photon");
+    this.dateTimeFormatter = DateTimeFormat
+          .forPattern("yyyy-MM-dd HH:mm")
+          .withZone(DateTimeZone.forOffsetHours(8));
   }
 
   public void importFiles(File importDirectory) {
@@ -31,10 +34,6 @@ public class Photon {
 
     FileTree fileTree = new FileTree(importDirectory, new MediaFileFilter());
     
-    DateTimeFormatter dateTimeFormatter = DateTimeFormat
-            .forPattern("yyyy-MM-dd HH:mm")
-            .withZone(DateTimeZone.forOffsetHours(8));
-
     for (File file : fileTree) {
       try {
         PhotonFile photonFile = new PhotonFile(file);
@@ -42,10 +41,7 @@ public class Photon {
 
         nbFiles++;
         totalFileSize += photonFile.getLength();
-        System.out.println(String.format("[%s] [%s] %s",
-                dateTimeFormatter.print(photonFile.getDate().getTime()),
-                photonFile.getChecksum(),
-                photonFile.getPath()));
+        printPhotonFile(photonFile);
       } catch (Exception ex) {
         Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, file.getAbsolutePath(), ex);
       }
@@ -56,25 +52,38 @@ public class Photon {
             nbFiles, totalFileSize));
   }
   
-  public void exportSorted(File exportDirectory) {
-    DateTimeFormatter dateTimeFormatter = DateTimeFormat
-            .forPattern("yyyy-MM-dd HH:mm")
-            .withZone(DateTimeZone.forOffsetHours(8));
-    
-    Query query = new Query();
-    
-    long count = db.count(query, PhotonFile.class);
-    final int pageSize = 100;
-    for (int page = 0; page * pageSize < count; page++) {
-      List<PhotonFile> photonFiles = db.find(query.with(new PageRequest(page, pageSize, new Sort("date", "name"))), PhotonFile.class);
-      for (PhotonFile photonFile : photonFiles) {
-        System.out.println(String.format("[%s] [%s] %s",
-                dateTimeFormatter.print(photonFile.getDate().getTime()),
-                photonFile.getChecksum(),
-                photonFile.getPath()));
+  public void findDuplicates() {
+    PhotonFile prevFile = null;
+    boolean prevFilePrinted = false;
+      
+    for (PhotonFile photonFile : MongoUtil.find(db, new Query()
+            .with(new Sort("checksum", "date")), PhotonFile.class)) {
+      if ((prevFile != null) && (prevFile.getChecksum().equals(photonFile.getChecksum()))) {
+        if (!prevFilePrinted) {
+          printPhotonFile(prevFile);
+          prevFilePrinted = true;
+        }
+        printPhotonFile(photonFile);
+      }
+      else {
+        prevFile = photonFile;
+        prevFilePrinted = false;
       }
     }
-    
+  }
+  
+  public void exportSorted(File exportDirectory) {
+    for (PhotonFile photonFile : MongoUtil.find(db, new Query()
+            .with(new Sort("date", "name")), PhotonFile.class)) {
+      printPhotonFile(photonFile);
+    }
+  }
+  
+  private void printPhotonFile(PhotonFile photonFile) {
+    System.out.println(String.format("[%s] [%s] %s",
+            dateTimeFormatter.print(photonFile.getDate().getTime()),
+            photonFile.getChecksum(),
+            photonFile.getPath()));
   }
 
   public void closeDB() {
@@ -86,8 +95,11 @@ public class Photon {
 
     //photon.importFiles(new File(args[0]));
     
-    photon.exportSorted(new File(args[0]));
+    photon.findDuplicates();
+    
+    //photon.exportSorted(new File(args[0]));
 
     photon.closeDB();
   }
+
 }
