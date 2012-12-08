@@ -1,20 +1,15 @@
 package com.lemoulinstudio.photon.entity;
 
-import com.lemoulinstudio.photon.util.FileUtil;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
-import org.bson.types.ObjectId;
-import org.springframework.data.annotation.Id;
+import org.joda.time.DateTimeZone;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 import org.springframework.data.mongodb.core.index.Indexed;
 
-public class PhotonFile {
+public class Reference {
   
-  @Id
-  private ObjectId id;
-  
-  @Indexed(unique=true)
+  @Indexed
   private String path; // Full filename, including the path.
   
   @Indexed
@@ -26,34 +21,18 @@ public class PhotonFile {
   @Indexed
   private String extension; // Only the extension after the '.'.
   
-  private long length;
-  
-  @Indexed
-  private String checksum; // The sha256 checksum.
-
   @Indexed
   private Date date; // The creation date.
-  
-  @Indexed
-  private List<String> tags;
 
-  public PhotonFile() {
+  public Reference() {
   }
 
-  public PhotonFile(File file) throws Exception {
-    this.id = new ObjectId();
+  public Reference(File file) {
     this.path = file.getAbsolutePath();
     this.directory = file.getParentFile().getName();
-    this.name = file.getName().toLowerCase();
+    this.name = file.getName();
     this.extension = name.substring(name.lastIndexOf(".") + 1).toLowerCase();
-    this.length = file.length();
-    this.checksum = FileUtil.getSha256(file);
     this.date = new Date(file.lastModified());
-    this.tags = new ArrayList<String>();
-  }
-
-  public ObjectId getId() {
-    return id;
   }
 
   public String getPath() {
@@ -72,20 +51,17 @@ public class PhotonFile {
     return extension;
   }
 
-  public long getLength() {
-    return length;
-  }
-
-  public String getChecksum() {
-    return checksum;
-  }
-
   public Date getDate() {
     return date;
   }
+  
+  private static DateTimeFormatter dateTimeFormatter = DateTimeFormat
+          .forPattern("yyyy-MM-dd HH:mm")
+          .withZone(DateTimeZone.forOffsetHours(8));
 
-  public List<String> getTags() {
-    return tags;
+  @Override
+  public String toString() {
+    return String.format("[%s] %s", dateTimeFormatter.print(date.getTime()), path);
   }
-
+  
 }

@@ -14,6 +14,7 @@ public class MediaFileFilter extends ExtensionFileFilter {
               ".pcx",
               ".gif",
               
+              ".avi",
               ".mpg",
               ".mpeg",
               ".mp4",

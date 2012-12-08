@@ -1,6 +1,7 @@
 package com.lemoulinstudio.photon;
 
-import com.lemoulinstudio.photon.entity.PhotonFile;
+import com.lemoulinstudio.photon.entity.Content;
+import com.lemoulinstudio.photon.entity.Reference;
 import com.lemoulinstudio.photon.util.FileTree;
 import com.lemoulinstudio.photon.util.FileUtil;
 import com.lemoulinstudio.photon.util.filter.MediaFileFilter;
@@ -14,21 +15,18 @@ import java.util.logging.Logger;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 
 public class Photon {
 
   private final MongoTemplate db;
-  private final DateTimeFormatter dateTimeFormatter;
   private final DateTimeFormatter pathDateFormatter;
 
   public Photon() throws UnknownHostException {
     this.db = new MongoTemplate(new Mongo(), "photon");
-    this.dateTimeFormatter = DateTimeFormat
-          .forPattern("yyyy-MM-dd HH:mm")
-          .withZone(DateTimeZone.forOffsetHours(8));
     this.pathDateFormatter = DateTimeFormat
           .forPattern("yyyy/MM/dd/")
           .withZone(DateTimeZone.forOffsetHours(8));
@@ -42,66 +40,63 @@ public class Photon {
     
     for (File file : fileTree) {
       try {
-        PhotonFile photonFile = new PhotonFile(file);
-        db.save(photonFile);
+        Content content = new Content(file);
+        
+        db.upsert(new Query(new Criteria("hash").is(content.getHash())
+                .and("length").is(content.getLength())),
+                new Update().addToSet("references", content.getReferences().get(0)),
+                Content.class);
 
         nbFiles++;
-        totalFileSize += photonFile.getLength();
-        printPhotonFile(photonFile);
+        totalFileSize += content.getLength();
+        System.out.println(content.getReferences().get(0));
       } catch (Exception ex) {
         Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, file.getAbsolutePath(), ex);
       }
     }
 
     System.out.println(String.format(
-            "Imported %d file(s), with a total size of %d byte(s).",
+            "Imported %d file(s), with a total size of %d byte(s).\n",
             nbFiles, totalFileSize));
   }
   
-  public void findDuplicates() {
-    PhotonFile prevFile = null;
-    boolean prevFilePrinted = false;
-      
-    for (PhotonFile photonFile : MongoUtil.find(db, new Query()
-            .with(new Sort("checksum", "date")), PhotonFile.class)) {
-      if ((prevFile != null) && (prevFile.getChecksum().equals(photonFile.getChecksum()))) {
-        if (!prevFilePrinted) {
-          printPhotonFile(prevFile);
-          prevFilePrinted = true;
-        }
-        printPhotonFile(photonFile);
-      }
-      else {
-        prevFile = photonFile;
-        prevFilePrinted = false;
-      }
+  public void printDBContent() {
+    for (Content content : MongoUtil.find(db, new Query(), Content.class)) {
+      System.out.print(content);
     }
   }
   
+  public void findDuplicates() {
+    System.out.println("Duplicate files:");
+    
+    for (Content content : MongoUtil.find(db, new Query(
+            new Criteria("references").not().size(1)), Content.class)) {
+      System.out.print(content);
+    }
+    
+    System.out.println();
+  }
+  
   public void exportSorted(File exportDirectory) {
-    for (PhotonFile photonFile : MongoUtil.find(db, new Query()
-            .with(new Sort("date", "name")), PhotonFile.class)) {
-      //printPhotonFile(photonFile);
-      File sourceFile = new File(photonFile.getPath());
+    System.out.println("Export:");
+    
+    for (Content content : MongoUtil.find(db, new Query(), Content.class)) {
+      Reference reference = content.getEarliestReference();
+      File sourceFile = new File(reference.getPath());
       File destFile = new File(exportDirectory,
-              pathDateFormatter.print(photonFile.getDate().getTime())
-              + photonFile.getChecksum() + "_" + photonFile.getName().toLowerCase());
+              pathDateFormatter.print(reference.getDate().getTime())
+              + reference.getName());
       try {
         FileUtil.safeCopyFile(sourceFile, destFile);
         System.out.println(destFile.getAbsolutePath());
       } catch (IOException ex) {
-        Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, photonFile.getPath(), ex);
+        System.out.println("ERROR, skip: " + destFile.getAbsolutePath());
       }
     }
+    
+    System.out.println();
   }
   
-  private void printPhotonFile(PhotonFile photonFile) {
-    System.out.println(String.format("[%s] [%s] %s",
-            dateTimeFormatter.print(photonFile.getDate().getTime()),
-            photonFile.getChecksum(),
-            photonFile.getPath()));
-  }
-
   public void closeDB() {
     db.getDb().getMongo().close();
   }
@@ -109,11 +104,11 @@ public class Photon {
   public static void main(String[] args) throws UnknownHostException {
     Photon photon = new Photon();
 
-    //photon.importFiles(new File(args[0]));
+    photon.importFiles(new File(args[0]));
     
-    //photon.findDuplicates();
+    photon.findDuplicates();
     
-    //photon.exportSorted(new File(args[1]));
+    photon.exportSorted(new File(args[1]));
 
     photon.closeDB();
   }

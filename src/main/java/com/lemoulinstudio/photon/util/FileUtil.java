@@ -39,8 +39,7 @@ public class FileUtil {
   
   public static void safeCopyFile(File sourceFile, File destFile) throws IOException {
     if (destFile.exists()) {
-      System.out.println("File already exists, skip: " + destFile.getAbsolutePath());
-      return;
+      throw new IOException("File already exists.");
     }
     
     destFile.getParentFile().mkdirs();
