@@ -1,10 +1,12 @@
 package com.lemoulinstudio.photon.util.mongo;
 
 import com.mongodb.DBCursor;
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Iterator;
 import org.springframework.data.mongodb.core.convert.MongoConverter;
 
-public class EntityCursor<T> implements Iterable<T>, Iterator<T> {
+public class EntityCursor<T> implements Iterable<T>, Iterator<T>, Closeable {
   
   private MongoConverter converter;
   private Class<T> entityClass;
@@ -33,7 +35,12 @@ public class EntityCursor<T> implements Iterable<T>, Iterator<T> {
 
   @Override
   public void remove() {
-    throw new UnsupportedOperationException("Not supported.");
+    throw new UnsupportedOperationException( "Can't remove from a cursor." );
+  }
+
+  @Override
+  public void close() throws IOException {
+    cursor.close();
   }
   
 }
