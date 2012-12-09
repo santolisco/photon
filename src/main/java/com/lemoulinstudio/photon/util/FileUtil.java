@@ -28,7 +28,9 @@ public class FileUtil {
     
     while (true) {
       int nb = fis.read(buffer);
-      if (nb == -1) break;
+      if (nb == -1) {
+        break;
+      }
       md.update(buffer, 0, nb);
     }
     
@@ -68,4 +70,9 @@ public class FileUtil {
       }
     }
   }
+  
+  public static void createSymbolicLink(String file, String link) throws IOException {
+    Runtime.getRuntime().exec(String.format("ln -s %s %s", file, link));
+  }
+  
 }

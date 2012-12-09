@@ -39,19 +39,22 @@ public class Photon {
     FileTree fileTree = new FileTree(importDirectory, new MediaFileFilter());
     
     for (File file : fileTree) {
-      try {
-        Content content = new Content(file);
-        
-        db.upsert(new Query(new Criteria("hash").is(content.getHash())
-                .and("length").is(content.getLength())),
-                new Update().addToSet("references", content.getReferences().get(0)),
-                Content.class);
+      if (db.findOne(new Query(new Criteria("references.path")
+              .is(file.getAbsolutePath())), Content.class) == null) {
+        try {
+          Content content = new Content(file);
 
-        nbFiles++;
-        totalFileSize += content.getLength();
-        System.out.println(content.getReferences().get(0));
-      } catch (Exception ex) {
-        Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, file.getAbsolutePath(), ex);
+          db.upsert(new Query(new Criteria("hash").is(content.getHash())
+                  .and("length").is(content.getLength())),
+                  new Update().addToSet("references", content.getReferences().get(0)),
+                  Content.class);
+
+          nbFiles++;
+          totalFileSize += content.getLength();
+          System.out.println(content.getReferences().get(0));
+        } catch (Exception ex) {
+          Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, file.getAbsolutePath(), ex);
+        }
       }
     }
 
@@ -82,15 +85,17 @@ public class Photon {
     
     for (Content content : MongoUtil.find(db, new Query(), Content.class)) {
       Reference reference = content.getEarliestReference();
-      File sourceFile = new File(reference.getPath());
-      File destFile = new File(exportDirectory,
+      File source = new File(reference.getPath());
+      File link = new File(exportDirectory,
               pathDateFormatter.print(reference.getDate().getTime())
               + reference.getName());
       try {
-        FileUtil.safeCopyFile(sourceFile, destFile);
-        System.out.println(destFile.getAbsolutePath());
+        FileUtil.createSymbolicLink(
+                source.getAbsolutePath(),
+                link.getAbsolutePath());
+        System.out.println(link.getAbsolutePath());
       } catch (IOException ex) {
-        System.out.println("ERROR, skip: " + destFile.getAbsolutePath());
+        System.out.println("ERROR, skip: " + link.getAbsolutePath());
       }
     }
     
@@ -103,14 +108,15 @@ public class Photon {
 
   public static void main(String[] args) throws UnknownHostException {
     Photon photon = new Photon();
-
     photon.importFiles(new File(args[0]));
-    
-    photon.findDuplicates();
-    
-    photon.exportSorted(new File(args[1]));
-
+    //photon.findDuplicates();
+    //photon.exportSorted(new File(args[1]));
     photon.closeDB();
+    
+//    FileTree fileTree = new FileTree(new File(args[0]), new MediaFileFilter());
+//    for (File file : fileTree) {
+//      System.out.println(file.getAbsolutePath());
+//    }
   }
 
 }

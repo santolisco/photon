@@ -53,8 +53,9 @@ public class Content {
   }
   
   public Reference getEarliestReference() {
-    if (references.isEmpty())
+    if (references.isEmpty()) {
       return null;
+    }
     
     Reference ref = references.get(0);
     
@@ -71,8 +72,9 @@ public class Content {
   public String toString() {
     String s = String.format("[%s]\n", getHash());
     
-    for (Reference reference : getReferences())
+    for (Reference reference : getReferences()) {
       s += "  " + reference.toString() + "\n";
+    }
     
     return s;
   }

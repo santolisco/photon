@@ -16,7 +16,7 @@ public class FileIterator implements Iterator<File> {
     public int index;
 
     public DirectoryIterationContext(File[] files) {
-      this.files = files;
+      this.files = (files == null ? new File[0] : files);
       this.index = 0;
     }
   }
@@ -46,7 +46,7 @@ public class FileIterator implements Iterator<File> {
       }
 
       DirectoryIterationContext ic = stack.get(stackIndex);
-
+      
       if (ic.index >= ic.files.length) {
         stack.remove(stackIndex);
       } else {
