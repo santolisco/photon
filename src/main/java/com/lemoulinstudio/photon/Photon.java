@@ -43,15 +43,16 @@ public class Photon {
               .is(file.getAbsolutePath())), Content.class) == null) {
         try {
           Content content = new Content(file);
+          Reference reference = content.getReferences().iterator().next();
 
           db.upsert(new Query(new Criteria("hash").is(content.getHash())
                   .and("length").is(content.getLength())),
-                  new Update().addToSet("references", content.getReferences().get(0)),
+                  new Update().addToSet("references", reference),
                   Content.class);
 
           nbFiles++;
           totalFileSize += content.getLength();
-          System.out.println(content.getReferences().get(0));
+          System.out.println(reference);
         } catch (Exception ex) {
           Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, file.getAbsolutePath(), ex);
         }
@@ -80,43 +81,90 @@ public class Photon {
     System.out.println();
   }
   
-  public void exportSorted(File exportDirectory) {
-    System.out.println("Export:");
+  public void export(File exportDirectory, boolean useLinks) {
+    System.out.println("Export links:");
     
     for (Content content : MongoUtil.find(db, new Query(), Content.class)) {
+      for (Reference reference : content.getReferences()) {
+        File source = new File(reference.getPath());
+        File destination = new File(exportDirectory,
+                new File(source.getParentFile(),
+                    content.getHash() + "-" + reference.getName()).getAbsolutePath());
+        try {
+          if (useLinks) {
+            FileUtil.createSymbolicLink(
+                    source.getAbsolutePath(),
+                    destination.getAbsolutePath());
+          }
+          else {
+            FileUtil.safeCopyFile(source, destination);
+          }
+          System.out.println(destination.getAbsolutePath());
+        } catch (IOException ex) {
+          System.out.println("ERROR, skip: " + destination.getAbsolutePath());
+        }
+      }
+    }
+  }
+  
+  public void exportSorted(
+          File exportDirectory,
+          boolean useLinks,
+          String ... tags) {
+    System.out.println("Export:");
+    
+    Criteria criteria = new Criteria();
+    
+    //if (tags.length > 0) {
+    //  criteria = criteria.and("tags").in(tags)
+    //}
+    
+    for (Content content : MongoUtil.find(db, new Query(criteria), Content.class)) {
       Reference reference = content.getEarliestReference();
       File source = new File(reference.getPath());
-      File link = new File(exportDirectory,
+      File destination = new File(exportDirectory,
               pathDateFormatter.print(reference.getDate().getTime())
-              + reference.getName());
+              + content.getHash() + "-" + reference.getName());
       try {
-        FileUtil.createSymbolicLink(
-                source.getAbsolutePath(),
-                link.getAbsolutePath());
-        System.out.println(link.getAbsolutePath());
+        if (useLinks) {
+          FileUtil.createSymbolicLink(
+                  source.getAbsolutePath(),
+                  destination.getAbsolutePath());
+        }
+        else {
+          FileUtil.safeCopyFile(source, destination);
+        }
+        System.out.println(destination.getAbsolutePath());
       } catch (IOException ex) {
-        System.out.println("ERROR, skip: " + link.getAbsolutePath());
+        System.out.println("ERROR, skip: " + destination.getAbsolutePath());
       }
     }
     
     System.out.println();
   }
   
+  public void tagFileTree(File root, String tag) {
+    for (File file : new FileTree(root)) {
+      String name = file.getName();
+      String hash = name.substring(0, name.indexOf('-'));
+      Content content = db.findById(hash, Content.class);
+      content.getTags().add(tag);
+      db.save(content);
+    }
+  }
+
   public void closeDB() {
     db.getDb().getMongo().close();
   }
 
   public static void main(String[] args) throws UnknownHostException {
     Photon photon = new Photon();
-    photon.importFiles(new File(args[0]));
+    //photon.importFiles(new File(args[0]));
     //photon.findDuplicates();
-    //photon.exportSorted(new File(args[1]));
+    //photon.export(new File(args[1]), true, "relevant");
+    //photon.exportSorted(new File(args[1]), true, "relevant");
+    //photon.tagFileTree(new File(args[0]), "relevant");
     photon.closeDB();
-    
-//    FileTree fileTree = new FileTree(new File(args[0]), new MediaFileFilter());
-//    for (File file : fileTree) {
-//      System.out.println(file.getAbsolutePath());
-//    }
   }
 
 }

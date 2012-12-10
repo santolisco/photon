@@ -54,6 +54,29 @@ public class Reference {
   public Date getDate() {
     return date;
   }
+
+  @Override
+  public int hashCode() {
+    return path.hashCode();
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (obj == null) {
+      return false;
+    }
+    
+    if (getClass() != obj.getClass()) {
+      return false;
+    }
+    
+    final Reference other = (Reference) obj;
+    if ((this.path == null) ? (other.path != null) : !this.path.equals(other.path)) {
+      return false;
+    }
+    
+    return true;
+  }
   
   private static DateTimeFormatter dateTimeFormatter = DateTimeFormat
           .forPattern("yyyy-MM-dd HH:mm")
