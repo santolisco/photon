@@ -10,6 +10,9 @@ import com.mongodb.Mongo;
 import java.io.File;
 import java.io.IOException;
 import java.net.UnknownHostException;
+import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joda.time.DateTimeZone;
@@ -81,20 +84,26 @@ public class Photon {
     System.out.println();
   }
   
-  public void export(File exportDirectory, boolean useLinks) {
+  public void export(
+          File exportDirectory,
+          boolean useLinks,
+          List<String> tags) {
     System.out.println("Export links:");
     
-    for (Content content : MongoUtil.find(db, new Query(), Content.class)) {
+    Criteria criteria = new Criteria();
+    
+    if (tags.size() > 0) {
+      criteria = criteria.and("tags").all(tags);
+    }
+    
+    for (Content content : MongoUtil.find(db, new Query(criteria), Content.class)) {
       for (Reference reference : content.getReferences()) {
         File source = new File(reference.getPath());
         File destination = new File(exportDirectory,
-                new File(source.getParentFile(),
-                    content.getHash() + "-" + reference.getName()).getAbsolutePath());
+                new File(source.getParentFile(), reference.getName()).getAbsolutePath());
         try {
           if (useLinks) {
-            FileUtil.createSymbolicLink(
-                    source.getAbsolutePath(),
-                    destination.getAbsolutePath());
+            FileUtil.createSymbolicLink(source, destination);
           }
           else {
             FileUtil.safeCopyFile(source, destination);
@@ -110,26 +119,23 @@ public class Photon {
   public void exportSorted(
           File exportDirectory,
           boolean useLinks,
-          String ... tags) {
+          List<String> tags) {
     System.out.println("Export:");
     
     Criteria criteria = new Criteria();
     
-    //if (tags.length > 0) {
-    //  criteria = criteria.and("tags").in(tags)
-    //}
+    if (tags.size() > 0) {
+      criteria = criteria.and("tags").all(tags);
+    }
     
     for (Content content : MongoUtil.find(db, new Query(criteria), Content.class)) {
       Reference reference = content.getEarliestReference();
       File source = new File(reference.getPath());
       File destination = new File(exportDirectory,
-              pathDateFormatter.print(reference.getDate().getTime())
-              + content.getHash() + "-" + reference.getName());
+              pathDateFormatter.print(reference.getDate().getTime()) + reference.getName());
       try {
         if (useLinks) {
-          FileUtil.createSymbolicLink(
-                  source.getAbsolutePath(),
-                  destination.getAbsolutePath());
+          FileUtil.createSymbolicLink(source, destination);
         }
         else {
           FileUtil.safeCopyFile(source, destination);
@@ -143,13 +149,29 @@ public class Photon {
     System.out.println();
   }
   
-  public void tagFileTree(File root, String tag) {
+  public void tagFileTree(File root, List<String> tags) {
     for (File file : new FileTree(root)) {
-      String name = file.getName();
-      String hash = name.substring(0, name.indexOf('-'));
-      Content content = db.findById(hash, Content.class);
-      content.getTags().add(tag);
-      db.save(content);
+      try {
+        String pointedPath = Files.readSymbolicLink(file.toPath()).toString();
+        Content content = db.findOne(new Query(new Criteria("references.path").is(pointedPath)), Content.class);
+        content.getTags().addAll(tags);
+        db.save(content);
+      } catch (IOException ex) {
+        Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, null, ex);
+      }
+    }
+  }
+
+  public void untagFileTree(File root, List<String> tags) {
+    for (File file : new FileTree(root)) {
+      try {
+        String pointedPath = Files.readSymbolicLink(file.toPath()).toString();
+        Content content = db.findOne(new Query(new Criteria("references.path").is(pointedPath)), Content.class);
+        content.getTags().removeAll(tags);
+        db.save(content);
+      } catch (IOException ex) {
+        Logger.getLogger(Photon.class.getName()).log(Level.SEVERE, null, ex);
+      }
     }
   }
 
@@ -161,9 +183,9 @@ public class Photon {
     Photon photon = new Photon();
     //photon.importFiles(new File(args[0]));
     //photon.findDuplicates();
-    //photon.export(new File(args[1]), true, "relevant");
-    //photon.exportSorted(new File(args[1]), true, "relevant");
-    //photon.tagFileTree(new File(args[0]), "relevant");
+    //photon.export(new File(args[1]), true, Arrays.<String>asList("pomme"));
+    //photon.exportSorted(new File(args[1]), true, Arrays.<String>asList("relevant"));
+    //photon.tagFileTree(new File(args[1]), Arrays.<String>asList("pomme"));
     photon.closeDB();
   }
 

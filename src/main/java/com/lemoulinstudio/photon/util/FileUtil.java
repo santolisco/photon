@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.security.MessageDigest;
 
 public class FileUtil {
@@ -71,8 +72,9 @@ public class FileUtil {
     }
   }
   
-  public static void createSymbolicLink(String file, String link) throws IOException {
-    Runtime.getRuntime().exec(String.format("ln -s %s %s", file, link));
+  public static void createSymbolicLink(File file, File link) throws IOException {
+    link.getParentFile().mkdirs();
+    Files.createSymbolicLink(link.toPath(), file.toPath());
   }
   
 }
